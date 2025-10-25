@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>College Gate Pass System - Login</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="login-box">
+            <div class="logo-section">
+                <div class="logo-circle">🎓</div>
+                <h1>College Gate Pass</h1>
+                <p class="subtitle">Secure Access Management System</p>
+            </div>
+
+            <div class="role-selector">
+                <button class="role-btn active" data-role="student">Student</button>
+                <button class="role-btn" data-role="moderator">Moderator</button>
+                <button class="role-btn" data-role="gatekeeper">Gate Keeper</button>
+            </div>
+
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="userId">User ID</label>
+                    <input type="text" id="userId" placeholder="Enter your ID" required>
+                </div>
+
+                <div class="form-group" id="passwordGroup">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" placeholder="Enter your password" required>
+                </div>
+
+                <button type="submit" class="btn-primary">Login</button>
+            </form>
+
+            <div class="demo-credentials">
+                <p class="info-text">📌 Demo Credentials:</p>
+                <p>Student: S001 / student123</p>
+                <p>Moderator: M001 / mod123</p>
+                <p>Gate Keeper: G001 / gate123</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const roleBtns = document.querySelectorAll('.role-btn');
+        const loginForm = document.getElementById('loginForm');
+        let selectedRole = 'student';
+
+        // Role selection
+        roleBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                roleBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                selectedRole = btn.dataset.role;
+            });
+        });
+
+        // Login form submission
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const userId = document.getElementById('userId').value.trim();
+            const password = document.getElementById('password').value;
+
+            try {
+                const response = await fetch('http://localhost:3000/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId, password, role: selectedRole })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store user info in localStorage
+                    localStorage.setItem('userId', userId);
+                    localStorage.setItem('role', selectedRole);
+                    localStorage.setItem('userName', data.user.name);
+                    
+                    // Redirect based on role
+                    window.location.href = `${selectedRole}.html`;
+                } else {
+                    alert('Login failed: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error: Server is not running! Please start the backend server first.\n\nRun: node server.js in the backend folder');
+                console.error(error);
+            }
+        });
+    </script>
+</body>
+</html>

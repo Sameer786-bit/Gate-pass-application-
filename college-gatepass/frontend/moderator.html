@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moderator Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="nav-left">
+                <span class="logo">🎓 Gate Pass</span>
+            </div>
+            <div class="nav-right">
+                <span id="userName" class="user-name"></span>
+                <button onclick="logout()" class="btn-logout">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1>Moderator Dashboard</h1>
+            <div class="filter-tabs">
+                <button class="filter-btn active" onclick="filterRequests('all')">All</button>
+                <button class="filter-btn" onclick="filterRequests('Pending')">Pending</button>
+                <button class="filter-btn" onclick="filterRequests('Approved')">Approved</button>
+                <button class="filter-btn" onclick="filterRequests('Rejected')">Rejected</button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #fff3cd;">⏳</div>
+                <div class="stat-info">
+                    <h3 id="pendingCount">0</h3>
+                    <p>Pending Review</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #d4edda;">✓</div>
+                <div class="stat-info">
+                    <h3 id="approvedCount">0</h3>
+                    <p>Approved</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #f8d7da;">✗</div>
+                <div class="stat-info">
+                    <h3 id="rejectedCount">0</h3>
+                    <p>Rejected</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="requests-section">
+            <h2>Gate Pass Requests</h2>
+            <div id="requestsList" class="requests-list">
+                <p class="loading">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Modal -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeReviewModal()">&times;</span>
+            <h2>Review Request</h2>
+            <div id="reviewDetails"></div>
+            <form id="reviewForm">
+                <div class="form-group">
+                    <label>Remarks (Optional)</label>
+                    <textarea id="remarks" rows="3" placeholder="Enter your remarks..."></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" onclick="reviewRequest('Approved')" class="btn-success">✓ Approve</button>
+                    <button type="button" onclick="reviewRequest('Rejected')" class="btn-danger">✗ Reject</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const userId = localStorage.getItem('userId');
+        const userName = localStorage.getItem('userName');
+        let allRequests = [];
+        let currentRequestId = null;
+
+        // Check if user is logged in
+        if (!userId || localStorage.getItem('role') !== 'moderator') {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('userName').textContent = userName || userId;
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+
+        function openReviewModal(request) {
+            currentRequestId = request.id;
+            document.getElementById('reviewModal').style.display = 'block';
+            document.getElementById('reviewDetails').innerHTML = `
+                <div class="review-info">
+                    <p><strong>Student:</strong> ${request.studentName} (${request.studentId})</p>
+                    <p><strong>Reason:</strong> ${request.reason}</p>
+                    <p><strong>Return Time:</strong> ${request.returnTime}</p>
+                    <p><strong>Submitted:</strong> ${new Date(request.timestamp).toLocaleString('en-IN', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    })}</p>
+                </div>
+            `;
+        }
+
+        function closeReviewModal() {
+            document.getElementById('reviewModal').style.display = 'none';
+            document.getElementById('remarks').value = '';
+            currentRequestId = null;
+        }
+
+        async function reviewRequest(status) {
+            const remarks = document.getElementById('remarks').value.trim();
+
+            if (!currentRequestId) {
+                alert('No request selected');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/requests/${currentRequestId}/review`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        status,
+                        moderatorId: userId,
+                        moderatorName: userName,
+                        remarks
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert(`✅ Request ${status.toLowerCase()} successfully!`);
+                    closeReviewModal();
+                    loadRequests();
+                } else {
+                    alert('❌ Failed to review request: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Error reviewing request. Please check if server is running.');
+                console.error(error);
+            }
+        }
+
+        async function loadRequests() {
+            try {
+                const response = await fetch('http://localhost:3000/api/requests');
+                const data = await response.json();
+
+                if (data.success) {
+                    allRequests = data.requests;
+                    displayRequests(allRequests);
+                    updateStats(allRequests);
+                }
+            } catch (error) {
+                document.getElementById('requestsList').innerHTML = '<p class="no-data">Error loading requests. Please refresh the page.</p>';
+                console.error('Error loading requests:', error);
+            }
+        }
+
+        function filterRequests(filter) {
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Filter and display
+            const filtered = filter === 'all' 
+                ? allRequests 
+                : allRequests.filter(r => r.status === filter);
+            displayRequests(filtered);
+        }
+
+        function displayRequests(requests) {
+            const requestsList = document.getElementById('requestsList');
+            
+            if (requests.length === 0) {
+                requestsList.innerHTML = '<p class="no-data">No requests found.</p>';
+                return;
+            }
+
+            requestsList.innerHTML = requests.map(req => `
+                <div class="request-card fade-in">
+                    <div class="request-header">
+                        <div>
+                            <h3>${req.studentName}</h3>
+                            <span class="student-id">${req.studentId}</span>
+                        </div>
+                        <span class="badge badge-${req.status.toLowerCase()}">${req.status}</span>
+                    </div>
+                    <div class="request-body">
+                        <p><strong>Reason:</strong> ${req.reason}</p>
+                        <p><strong>Return Time:</strong> ${req.returnTime}</p>
+                        <p><strong>Submitted:</strong> ${new Date(req.timestamp).toLocaleString('en-IN', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</p>
+                        ${req.moderatorRemarks ? `<p><strong>Remarks:</strong> ${req.moderatorRemarks}</p>` : ''}
+                        ${req.moderatorName ? `<p><strong>Reviewed by:</strong> ${req.moderatorName}</p>` : ''}
+                        ${req.reviewedAt ? `<p><strong>Reviewed on:</strong> ${new Date(req.reviewedAt).toLocaleString('en-IN')}</p>` : ''}
+                    </div>
+                    ${req.status === 'Pending' ? `
+                        <div class="request-actions">
+                            <button onclick='openReviewModal(${JSON.stringify(req).replace(/'/g, "&apos;")})' class="btn-primary">Review Request</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function updateStats(requests) {
+            const pending = requests.filter(r => r.status === 'Pending').length;
+            const approved = requests.filter(r => r.status === 'Approved').length;
+            const rejected = requests.filter(r => r.status === 'Rejected').length;
+
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('approvedCount').textContent = approved;
+            document.getElementById('rejectedCount').textContent = rejected;
+        }
+
+        // Load requests on page load
+        loadRequests();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadRequests, 30000);
+    </script>
+</body>
+</html>

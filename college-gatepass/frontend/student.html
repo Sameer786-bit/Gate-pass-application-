@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="nav-left">
+                <span class="logo">🎓 Gate Pass</span>
+            </div>
+            <div class="nav-right">
+                <span id="userName" class="user-name"></span>
+                <button onclick="logout()" class="btn-logout">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <div class="dashboard-header">
+            <h1>Student Dashboard</h1>
+            <button onclick="openRequestModal()" class="btn-primary">+ New Request</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #fff3cd;">⏳</div>
+                <div class="stat-info">
+                    <h3 id="pendingCount">0</h3>
+                    <p>Pending</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #d4edda;">✓</div>
+                <div class="stat-info">
+                    <h3 id="approvedCount">0</h3>
+                    <p>Approved</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon" style="background: #f8d7da;">✗</div>
+                <div class="stat-info">
+                    <h3 id="rejectedCount">0</h3>
+                    <p>Rejected</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="requests-section">
+            <h2>My Requests</h2>
+            <div id="requestsList" class="requests-list">
+                <p class="loading">Loading...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for New Request -->
+    <div id="requestModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeRequestModal()">&times;</span>
+            <h2>New Gate Pass Request</h2>
+            <form id="requestForm">
+                <div class="form-group">
+                    <label>Reason for Exit</label>
+                    <textarea id="reason" rows="4" placeholder="Enter your reason (e.g., Medical appointment, Family emergency, etc.)" required></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Expected Return Time</label>
+                    <input type="time" id="returnTime" required>
+                </div>
+                <button type="submit" class="btn-primary">Submit Request</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const userId = localStorage.getItem('userId');
+        const userName = localStorage.getItem('userName');
+
+        // Check if user is logged in
+        if (!userId || localStorage.getItem('role') !== 'student') {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('userName').textContent = userName || userId;
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+
+        function openRequestModal() {
+            document.getElementById('requestModal').style.display = 'block';
+        }
+
+        function closeRequestModal() {
+            document.getElementById('requestModal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside
+        window.onclick = function(event) {
+            const modal = document.getElementById('requestModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
+        }
+
+        // Submit new request
+        document.getElementById('requestForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const reason = document.getElementById('reason').value.trim();
+            const returnTime = document.getElementById('returnTime').value;
+
+            if (!reason || !returnTime) {
+                alert('Please fill all fields');
+                return;
+            }
+
+            try {
+                const response = await fetch('http://localhost:3000/api/requests', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        studentId: userId,
+                        studentName: userName,
+                        reason,
+                        returnTime
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Request submitted successfully!');
+                    closeRequestModal();
+                    loadRequests();
+                    document.getElementById('requestForm').reset();
+                } else {
+                    alert('❌ Failed to submit request: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Error submitting request. Please check if server is running.');
+                console.error(error);
+            }
+        });
+
+        // Load student's requests
+        async function loadRequests() {
+            try {
+                const response = await fetch(`http://localhost:3000/api/requests/student/${userId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    displayRequests(data.requests);
+                    updateStats(data.requests);
+                }
+            } catch (error) {
+                document.getElementById('requestsList').innerHTML = '<p class="no-data">Error loading requests. Please refresh the page.</p>';
+                console.error('Error loading requests:', error);
+            }
+        }
+
+        function displayRequests(requests) {
+            const requestsList = document.getElementById('requestsList');
+            
+            if (requests.length === 0) {
+                requestsList.innerHTML = '<p class="no-data">No requests yet. Click "New Request" to create one.</p>';
+                return;
+            }
+
+            requestsList.innerHTML = requests.map(req => `
+                <div class="request-card fade-in">
+                    <div class="request-header">
+                        <div>
+                            <span class="badge badge-${req.status.toLowerCase()}">${req.status}</span>
+                        </div>
+                        <span class="request-date">${new Date(req.timestamp).toLocaleString('en-IN', { 
+                            day: '2-digit', 
+                            month: 'short', 
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        })}</span>
+                    </div>
+                    <div class="request-body">
+                        <p><strong>Reason:</strong> ${req.reason}</p>
+                        <p><strong>Return Time:</strong> ${req.returnTime}</p>
+                        ${req.moderatorRemarks ? `<p><strong>Moderator Remarks:</strong> ${req.moderatorRemarks}</p>` : ''}
+                        ${req.moderatorName ? `<p><strong>Reviewed by:</strong> ${req.moderatorName}</p>` : ''}
+                        ${req.reviewedAt ? `<p><strong>Reviewed on:</strong> ${new Date(req.reviewedAt).toLocaleString('en-IN')}</p>` : ''}
+                        ${req.used ? '<p><strong>Status:</strong> ✅ Pass Used</p>' : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateStats(requests) {
+            const pending = requests.filter(r => r.status === 'Pending').length;
+            const approved = requests.filter(r => r.status === 'Approved').length;
+            const rejected = requests.filter(r => r.status === 'Rejected').length;
+
+            document.getElementById('pendingCount').textContent = pending;
+            document.getElementById('approvedCount').textContent = approved;
+            document.getElementById('rejectedCount').textContent = rejected;
+        }
+
+        // Load requests on page load
+        loadRequests();
+
+        // Auto-refresh every 30 seconds
+        setInterval(loadRequests, 30000);
+    </script>
+</body>
+</html>

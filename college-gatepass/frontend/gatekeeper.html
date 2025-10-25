@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gate Keeper Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="nav-left">
+                <span class="logo">🎓 Gate Pass</span>
+            </div>
+            <div class="nav-right">
+                <span id="userName" class="user-name"></span>
+                <button onclick="logout()" class="btn-logout">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <div class="gatekeeper-section">
+            <h1>Gate Keeper Verification</h1>
+            <p class="subtitle">Scan or enter student ID to verify gate pass</p>
+
+            <div class="scan-box">
+                <div class="scan-icon">📱</div>
+                <form id="scanForm" class="scan-form">
+                    <div class="form-group">
+                        <input 
+                            type="text" 
+                            id="studentId" 
+                            placeholder="Enter Student ID (e.g., S001)" 
+                            autofocus
+                            required
+                        >
+                    </div>
+                    <button type="submit" class="btn-primary btn-large">Verify Pass</button>
+                </form>
+            </div>
+
+            <div id="verificationResult" class="verification-result"></div>
+
+            <div class="recent-scans">
+                <h2>Recent Verifications</h2>
+                <div id="recentScans" class="scans-list">
+                    <p class="no-data">No recent verifications</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const userId = localStorage.getItem('userId');
+        const userName = localStorage.getItem('userName');
+
+        // Check if user is logged in
+        if (!userId || localStorage.getItem('role') !== 'gatekeeper') {
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('userName').textContent = userName || userId;
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = 'index.html';
+        }
+
+        let recentScans = [];
+
+        document.getElementById('scanForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const studentId = document.getElementById('studentId').value.trim().toUpperCase();
+            await verifyStudent(studentId);
+        });
+
+        async function verifyStudent(studentId) {
+            const resultDiv = document.getElementById('verificationResult');
+            resultDiv.innerHTML = '<div class="loading">🔍 Verifying...</div>';
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/verify/${studentId}`);
+                const data = await response.json();
+
+                if (data.success && data.hasPass && data.pass) {
+                    const pass = data.pass;
+                    
+                    // Add to recent scans
+                    addToRecentScans({
+                        studentId: pass.studentId,
+                        studentName: pass.studentName,
+                        time: new Date().toLocaleString('en-IN'),
+                        status: 'Valid Pass',
+                        isValid: true
+                    });
+                    
+                    resultDiv.innerHTML = `
+                        <div class="verification-success fade-in">
+                            <div class="success-icon">✓</div>
+                            <h2>Valid Pass Found</h2>
+                            <div class="pass-details">
+                                <p><strong>Student:</strong> ${pass.studentName}</p>
+                                <p><strong>Student ID:</strong> ${pass.studentId}</p>
+                                <p><strong>Reason:</strong> ${pass.reason}</p>
+                                <p><strong>Return Time:</strong> ${pass.returnTime}</p>
+                                <p><strong>Approved by:</strong> ${pass.moderatorName}</p>
+                                <p><strong>Approved on:</strong> ${new Date(pass.reviewedAt).toLocaleString('en-IN')}</p>
+                            </div>
+                            <button onclick="markAsUsed('${pass.id}')" class="btn-success btn-large">Mark as Used & Allow Exit</button>
+                        </div>
+                    `;
+                } else {
+                    addToRecentScans({
+                        studentId: studentId,
+                        studentName: 'Unknown',
+                        time: new Date().toLocaleString('en-IN'),
+                        status: 'No Valid Pass',
+                        isValid: false
+                    });
+
+                    resultDiv.innerHTML = `
+                        <div class="verification-error fade-in">
+                            <div class="error-icon">✗</div>
+                            <h2>No Valid Pass</h2>
+                            <p>Student ID <strong>${studentId}</strong> does not have an approved gate pass.</p>
+                            <p>Please ask the student to request a pass or contact the moderator.</p>
+                        </div>
+                    `;
+                }
+
+                // Clear input
+                document.getElementById('studentId').value = '';
+                document.getElementById('studentId').focus();
+
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="verification-error fade-in">
+                        <div class="error-icon">⚠️</div>
+                        <h2>Error</h2>
+                        <p>Unable to verify pass. Please check if server is running.</p>
+                    </div>
+                `;
+                console.error('Error verifying student:', error);
+            }
+        }
+
+        async function markAsUsed(requestId) {
+            if (!confirm('Mark this pass as used? Student will be allowed to exit.')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:3000/api/requests/${requestId}/use`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('✅ Pass marked as used! Student can exit.');
+                    document.getElementById('verificationResult').innerHTML = '';
+                    document.getElementById('studentId').focus();
+                } else {
+                    alert('❌ Failed to mark pass as used: ' + data.message);
+                }
+            } catch (error) {
+                alert('❌ Error marking pass as used.');
+                console.error(error);
+            }
+        }
+
+        function addToRecentScans(scan) {
+            recentScans.unshift(scan);
+            if (recentScans.length > 10) {
+                recentScans.pop();
+            }
+            displayRecentScans();
+        }
+
+        function displayRecentScans() {
+            const scansDiv = document.getElementById('recentScans');
+            
+            if (recentScans.length === 0) {
+                scansDiv.innerHTML = '<p class="no-data">No recent verifications</p>';
+                return;
+            }
+
+            scansDiv.innerHTML = recentScans.map(scan => `
+                <div class="scan-item fade-in">
+                    <div class="scan-item-info">
+                        <h4>${scan.studentName} (${scan.studentId})</h4>
+                        <p>${scan.time}</p>
+                    </div>
+                    <span class="scan-status ${scan.isValid ? 'valid' : 'invalid'}">${scan.status}</span>
+                </div>
+            `).join('');
+        }
+
+        // Auto-focus on input field
+        document.getElementById('studentId').focus();
+    </script>
+</body>
+</html>

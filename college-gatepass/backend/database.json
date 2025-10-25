@@ -1,0 +1,48 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "student1",
+      "password": "pass123",
+      "role": "student",
+      "name": "Rahul Kumar",
+      "email": "rahul@college.edu",
+      "rollNumber": "CS2023001"
+    },
+    {
+      "id": "2",
+      "username": "moderator1",
+      "password": "mod123",
+      "role": "moderator",
+      "name": "Dr. Priya Sharma",
+      "email": "priya.sharma@college.edu",
+      "department": "Computer Science"
+    },
+    {
+      "id": "3",
+      "username": "gatekeeper1",
+      "password": "gate123",
+      "role": "gatekeeper",
+      "name": "Rajesh Singh",
+      "email": "rajesh@college.edu",
+      "gateNumber": "Main Gate"
+    }
+  ],
+  "requests": [
+    {
+      "id": "REQ1761384281949",
+      "studentId": "1",
+      "studentName": "Rahul Kumar",
+      "reason": "Doctor appointment",
+      "returnTime": "16:00",
+      "status": "Pending",
+      "timestamp": "2025-10-25T09:24:41.949Z",
+      "moderatorId": null,
+      "moderatorName": null,
+      "moderatorRemarks": null,
+      "reviewedAt": null,
+      "used": false,
+      "usedAt": null
+    }
+  ]
+}
